@@ -23,15 +23,18 @@ below.
 
 ## Step 1 — Build the USB (on this Mac)
 
-Plug in the USB stick, then list candidate disks:
+Plug in the USB stick, then run:
 
 ```bash
 cd reset_intell_mac
 sudo ./make-sierra-usb.sh
 ```
 
-This prints your external disks and exits without changing anything. Identify
-your USB stick (e.g. `/dev/disk6`), double-check it, then build:
+The script **scans for attached USB / external disks and presents a numbered
+menu** — pick your stick (or `q` to quit). It then asks you to re-type the disk
+identifier as a final confirmation before erasing anything.
+
+Prefer to skip the menu (e.g. for scripting)? Pass the disk explicitly:
 
 ```bash
 sudo ./make-sierra-usb.sh /dev/disk6

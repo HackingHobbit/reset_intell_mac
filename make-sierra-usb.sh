@@ -25,8 +25,8 @@
 # power-on). It will NOT boot an Apple Silicon Mac -- that is expected.
 #
 # Usage:
-#   sudo ./make-sierra-usb.sh                 # lists candidate USB disks, then exits
-#   sudo ./make-sierra-usb.sh /dev/diskN      # builds onto /dev/diskN (ERASES IT)
+#   sudo ./make-sierra-usb.sh                 # scan USB disks and pick from a menu
+#   sudo ./make-sierra-usb.sh /dev/diskN      # skip the menu; build onto /dev/diskN
 #
 # Environment overrides:
 #   WORKDIR=/path   where the 5 GB download + extracted app live (default ./work)
@@ -72,25 +72,48 @@ trap cleanup EXIT
 
 mkdir -p "$WORKDIR"
 
-# --- list candidate disks if no target given ---------------------------------
-if [ $# -lt 1 ]; then
-  step "Attached EXTERNAL physical disks (candidate USB sticks):"
-  diskutil list external physical || true
-  cat <<EOF
+# --- choose the target USB disk ----------------------------------------------
+# Scan attached external physical disks and present a numbered menu. You can
+# also skip the menu by passing the disk explicitly: sudo ./make-sierra-usb.sh /dev/diskN
+select_target_disk() {
+  local disks=() d name size i choice
+  while IFS= read -r d; do
+    [ -n "$d" ] && disks+=("$d")
+  done < <(diskutil list external physical 2>/dev/null | awk '/^\/dev\/disk[0-9]+ /{print $1}')
 
-No target disk was given, so nothing has been changed.
+  if [ "${#disks[@]}" -eq 0 ]; then
+    die "No external/USB disks found. Plug in your USB stick and try again."
+  fi
 
-Identify your USB stick above (e.g. /dev/disk6), make sure it is the right one,
-then re-run:
+  while :; do
+    step "Available external / USB disks:"
+    i=1
+    for d in "${disks[@]}"; do
+      name="$(diskutil info "$d" | awk -F': *' '/Device \/ Media Name/{print $2}')"
+      size="$(diskutil info "$d" | awk -F': *' '/Disk Size/{print $2}')"
+      printf '  %d) %-12s %s  (%s)\n' "$i" "$d" "${name:-Unknown}" "${size:-?}"
+      i=$((i + 1))
+    done
+    printf '\nSelect a disk to ERASE [1-%d] (q to quit): ' "${#disks[@]}"
+    read -r choice
+    case "$choice" in
+      q|Q)         die "Cancelled. Nothing was changed." ;;
+      ''|*[!0-9]*) warn "Please enter a number between 1 and ${#disks[@]}."; echo; continue ;;
+    esac
+    if [ "$choice" -ge 1 ] && [ "$choice" -le "${#disks[@]}" ]; then
+      TARGET="${disks[$((choice - 1))]}"
+      ok "Selected $TARGET"
+      return 0
+    fi
+    warn "Out of range. Try again."; echo
+  done
+}
 
-    sudo $0 /dev/diskN
-
-WARNING: that disk will be COMPLETELY ERASED.
-EOF
-  exit 0
+if [ $# -ge 1 ]; then
+  TARGET="$1"
+else
+  select_target_disk
 fi
-
-TARGET="$1"
 
 # --- validate the target disk ------------------------------------------------
 step "Validating target disk $TARGET"
