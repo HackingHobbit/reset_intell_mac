@@ -1,0 +1,6 @@
+# The ~5 GB Sierra download + extracted installer; never commit these.
+work/
+*.dmg
+
+# macOS cruft
+.DS_Store
